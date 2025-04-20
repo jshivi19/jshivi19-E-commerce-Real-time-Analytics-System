@@ -1,3 +1,4 @@
+
 services:
   app:
     build:
@@ -16,15 +17,55 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=ecommerce_analytics
+      - POSTGRES_DB=twitter_data
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=shivasu19
       - SPARK_MASTER=spark://spark:7077
-    command: sh -c "
+      - PYTHONPATH=/app
+    command: >
+      sh -c "
+      export PYTHONPATH=/app &&
       sleep 30 &&
       python scripts/setup_kafka.py &&
       python scripts/setup_database.py &&
-      python src/main.py"
+      python src/main.py &&
+      python src/twitter_stream_listener.py"
+
+  batch-processing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+      export PYTHONPATH=/app &&
+      python scripts/batch_processing.py"
+
+  performance-comparison:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+      export PYTHONPATH=/app &&
+      python scripts/compare_performance.py"
+
+  result-validation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+      export PYTHONPATH=/app &&
+      python scripts/validate_results.py"
 
   zookeeper:
     image: wurstmeister/zookeeper:latest
@@ -33,11 +74,11 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
     healthcheck:
-      test: echo stat | nc localhost 2181
+      test: ["CMD", "sh", "-c", "echo stat | nc localhost 2181"]
       interval: 10s
       timeout: 5s
       retries: 5
-      
+
   kafka:
     image: wurstmeister/kafka:latest
     ports:
@@ -45,15 +86,15 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9092
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
     depends_on:
       zookeeper:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      test: ["CMD", "sh", "-c", "kafka-topics.sh --bootstrap-server kafka:9092 --list || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -63,13 +104,13 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: ecommerce_analytics
+      POSTGRES_DB: twitter_data
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: shivasu19
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 10s
       timeout: 5s
       retries: 5

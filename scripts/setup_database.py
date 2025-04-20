@@ -17,30 +17,27 @@ def create_database():
     """Create the database if it doesn't exist"""
     db_name = POSTGRES_CONFIG['database']
     
-    # Connect to PostgreSQL server
-    conn = psycopg2.connect(
-        host=POSTGRES_CONFIG['host'],
-        port=POSTGRES_CONFIG['port'],
-        user=POSTGRES_CONFIG['user'],
-        password=POSTGRES_CONFIG['password'],
-        database='postgres'  # Connect to default database first
-    )
-    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    
+    # Connect directly to target database
     try:
-        with conn.cursor() as cur:
-            # Check if database exists
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
-            exists = cur.fetchone()
-            
-            if not exists:
-                cur.execute(f'CREATE DATABASE {db_name}')
-                logger.info(f"Database '{db_name}' created successfully")
-            else:
-                logger.info(f"Database '{db_name}' already exists")
-    
-    finally:
+        conn = psycopg2.connect(**POSTGRES_CONFIG)
         conn.close()
+        logger.info(f"Successfully connected to database '{db_name}'")
+    except psycopg2.OperationalError as e:
+        if "does not exist" in str(e):
+            # Database doesn't exist, create it
+            temp_config = POSTGRES_CONFIG.copy()
+            temp_config['database'] = 'postgres'
+            conn = psycopg2.connect(**temp_config)
+            conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(f'CREATE DATABASE {db_name}')
+                    logger.info(f"Database '{db_name}' created successfully")
+            finally:
+                conn.close()
+        else:
+            # Other connection error
+            raise
 
 def create_extensions():
     """Create necessary PostgreSQL extensions"""
@@ -115,30 +112,22 @@ def create_tables():
                 )
             """)
 
-            # Analytics Results table
+            # Tweets table
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS analytics_results (
-                    id SERIAL PRIMARY KEY,
-                    window_start TIMESTAMP NOT NULL,
-                    window_end TIMESTAMP NOT NULL,
-                    metric_name VARCHAR(100) NOT NULL,
-                    metric_value DECIMAL(15,2) NOT NULL,
-                    dimensions JSONB,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
-                    CONSTRAINT analytics_window_check 
-                        CHECK (window_end > window_start),
-                    CONSTRAINT analytics_results_unique 
-                        UNIQUE (window_start, window_end, metric_name, dimensions)
+                CREATE TABLE IF NOT EXISTS tweets (
+                    tweet_id VARCHAR(50) PRIMARY KEY,
+                    text TEXT NOT NULL,
+                    user_id VARCHAR(50) NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    hashtags JSONB,
+                    created_at_db TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
             # Create index on analytics_results
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_analytics_results_window 
-                ON analytics_results USING GIST (
-                    tstzrange(window_start, window_end, '[]')
-                )
+                ON analytics_results (window_start, window_end)
             """)
 
             conn.commit()

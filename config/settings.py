@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     kafka_topics: dict = {
         'user_activity': 'user_activity',
         'purchase_events': 'purchase_events',
-        'inventory_updates': 'inventory_updates'
+        'inventory_updates': 'inventory_updates',
+        'tweets_topic': 'tweets_topic',
+        'user_data_topic': 'user_data_topic'
     }
 
     # Spark Configuration
@@ -43,3 +45,17 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
+
+# PostgreSQL Configuration Dictionary for database.py
+POSTGRES_CONFIG = {
+    'host': settings.postgres_host,
+    'port': settings.postgres_port,
+    'database': settings.postgres_database,
+    'user': settings.postgres_user,
+    'password': settings.postgres_password
+}
+
+# Export settings for data generator
+NUMBER_OF_PRODUCTS = settings.number_of_products
+NUMBER_OF_USERS = settings.number_of_users
+SIMULATION_INTERVAL = settings.simulation_interval

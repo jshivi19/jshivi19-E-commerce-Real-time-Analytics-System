@@ -46,10 +46,10 @@ class EcommerceKafkaProducer:
 
     def send_event(self, event_type: str, event_data: Dict[str, Any], key: str = None) -> None:
         """
-        Send an event to the appropriate Kafka topic
+        Send an event to the appropriate Kafka topic. Extended to handle tweet-specific data.
         
         Args:
-            event_type: Type of event ('user_activity', 'purchase', 'inventory')
+            event_type: Type of event ('user_activity', 'purchase', 'inventory', 'tweet')
             event_data: Event data to be sent
             key: Optional message key for partitioning
         """
@@ -61,6 +61,14 @@ class EcommerceKafkaProducer:
                 return
 
             # If no key provided, use event ID from data
+            if event_type == 'tweet':
+                # Ensure tweet-specific fields are present
+                required_fields = ['tweet_id', 'user_id', 'text', 'timestamp']
+                for field in required_fields:
+                    if field not in event_data:
+                        logger.error("Missing required field '%s' in tweet data", field)
+                        return
+
             if not key and isinstance(event_data, dict):
                 key = event_data.get('event_id', str(hash(json.dumps(event_data))))
 

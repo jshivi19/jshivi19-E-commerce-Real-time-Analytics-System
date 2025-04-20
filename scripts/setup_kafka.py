@@ -4,7 +4,7 @@ Script to initialize Kafka topics for the E-commerce Analytics System
 import logging
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
-from config.settings import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPICS
+from config.settings import settings
 
 # Configure logging
 logging.basicConfig(
@@ -17,7 +17,7 @@ def create_topics():
     """Create Kafka topics if they don't exist"""
     try:
         admin_client = KafkaAdminClient(
-            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            bootstrap_servers=settings.kafka_bootstrap_servers,
             client_id='ecommerce-admin'
         )
 
@@ -28,12 +28,12 @@ def create_topics():
                 num_partitions=3,  # Multiple partitions for parallelism
                 replication_factor=1  # Set to higher value in production
             )
-            for topic_name in KAFKA_TOPICS.values()
+            for topic_name in settings.kafka_topics.values()
         ]
 
         # Create topics
         admin_client.create_topics(new_topics=topic_list, validate_only=False)
-        logger.info("Successfully created Kafka topics: %s", list(KAFKA_TOPICS.values()))
+        logger.info("Successfully created Kafka topics: %s", list(settings.kafka_topics.values()))
 
     except TopicAlreadyExistsError:
         logger.info("Topics already exist")
@@ -47,13 +47,13 @@ def delete_topics():
     """Delete Kafka topics if they exist (useful for testing)"""
     try:
         admin_client = KafkaAdminClient(
-            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            bootstrap_servers=settings.kafka_bootstrap_servers,
             client_id='ecommerce-admin'
         )
 
         # Delete topics
-        admin_client.delete_topics(list(KAFKA_TOPICS.values()))
-        logger.info("Successfully deleted Kafka topics: %s", list(KAFKA_TOPICS.values()))
+        admin_client.delete_topics(list(settings.kafka_topics.values()))
+        logger.info("Successfully deleted Kafka topics: %s", list(settings.kafka_topics.values()))
 
     except Exception as e:
         logger.error("Error deleting Kafka topics: %s", str(e))
